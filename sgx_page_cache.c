@@ -516,7 +516,7 @@ struct sgx_epc_page *sgx_alloc_page(unsigned int flags)
 		}
 
 		if (signal_pending(current)) {
-			entry = ERR_PTR(-ERESTARTSYS);
+			entry = ERR_PTR(-EINTR);
 			break;
 		}
 

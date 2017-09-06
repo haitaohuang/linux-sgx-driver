@@ -606,6 +606,8 @@ static long sgx_ioc_enclave_create(struct file *filep, unsigned int cmd,
 	mutex_unlock(&sgx_tgid_ctx_mutex);
 
 out:
+        if (ret == -EINTR)
+             ret = -ERESTARTSYS;
 	if (ret && encl)
 		kref_put(&encl->refcount, sgx_encl_release);
 	kfree(secs);
@@ -697,7 +699,10 @@ static int __encl_add_page(struct sgx_encl *encl,
 	ret = sgx_init_page(encl, encl_page, addp->addr);
 	if (ret) {
 		__free_page(tmp_page);
-		return -EINVAL;
+                if (ret == -EINTR)
+                   return -ERESTARTSYS;
+                else
+		   return ret;
 	}
 
 	mutex_lock(&encl->lock);
