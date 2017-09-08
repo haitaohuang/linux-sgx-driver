@@ -829,19 +829,24 @@ static int __sgx_encl_init(struct sgx_encl *encl, char *sigstruct,
 	void *secs_va = NULL;
 	int i;
 	int j;
+        pr_err_ratelimited("intel_sgx: checking einit token\n");
 
 	if (einittoken->valid && einittoken->isvsvnle < sgx_isvsvnle_min)
 		return SGX_LE_ROLLBACK;
 
+        pr_err_ratelimited("intel_sgx: einit  loop\n");
 	for (i = 0; i < SGX_EINIT_SLEEP_COUNT; i++) {
 		for (j = 0; j < SGX_EINIT_SPIN_COUNT; j++) {
 			mutex_lock(&encl->lock);
 			secs_va = sgx_get_page(secs_epc);
 			ret = __einit(sigstruct, einittoken, secs_va);
+        pr_err_ratelimited("intel_sgx: einit returned %d\n", ret);
 			sgx_put_page(secs_va);
 			mutex_unlock(&encl->lock);
-			if (ret == SGX_UNMASKED_EVENT)
+			if (ret == SGX_UNMASKED_EVENT){
+        pr_err_ratelimited("intel_sgx: einit continue loop\n");
 				continue;
+			}
 			else
 				break;
 		}
@@ -849,14 +854,17 @@ static int __sgx_encl_init(struct sgx_encl *encl, char *sigstruct,
 		if (ret != SGX_UNMASKED_EVENT)
 			goto out;
 
+        pr_err_ratelimited("intel_sgx:sleep\n");
 		msleep_interruptible(SGX_EINIT_SLEEP_TIME);
-		if (signal_pending(current))
+		if (signal_pending(current)){
+        pr_err_ratelimited("intel_sgx:woke up with signal\n");
 			return -ERESTARTSYS;
+		}
 	}
 
 out:
 	if (ret) {
-		sgx_dbg(encl, "EINIT returned %d\n", ret);
+		sgx_err(encl, "EINIT returned %d\n", ret);
 	} else {
 		encl->flags |= SGX_ENCL_INITIALIZED;
 
