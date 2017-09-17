@@ -851,7 +851,7 @@ static int __sgx_encl_init(struct sgx_encl *encl, char *sigstruct,
 
 		msleep_interruptible(SGX_EINIT_SLEEP_TIME);
 		if (signal_pending(current))
-			return -EINTR;
+			return -ERESTARTSYS;
 	}
 
 out:
