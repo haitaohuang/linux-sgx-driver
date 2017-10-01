@@ -168,44 +168,8 @@ static int sgx_init_platform(void)
 {
 	unsigned int eax, ebx, ecx, edx;
 	unsigned long size;
-	int i;
 
-	cpuid(0, &eax, &ebx, &ecx, &edx);
-	if (eax < SGX_CPUID) {
-		pr_err("intel_sgx: CPUID is missing the SGX leaf instruction\n");
-		return -ENODEV;
-	}
-
-	if (!boot_cpu_has(X86_FEATURE_SGX)) {
-		pr_err("intel_sgx: CPU is missing the SGX feature\n");
-		return -ENODEV;
-	}
-
-	cpuid_count(SGX_CPUID, 0x0, &eax, &ebx, &ecx, &edx);
-	if (!(eax & 1)) {
-		pr_err("intel_sgx: CPU does not support the SGX 1.0 instruction set\n");
-		return -ENODEV;
-	}
-
-	if (boot_cpu_has(X86_FEATURE_OSXSAVE)) {
-		cpuid_count(SGX_CPUID, 0x1, &eax, &ebx, &ecx, &edx);
-		sgx_xfrm_mask = (((u64)edx) << 32) + (u64)ecx;
-		for (i = 2; i < 64; i++) {
-			cpuid_count(0x0D, i, &eax, &ebx, &ecx, &edx);
-			if ((1 << i) & sgx_xfrm_mask)
-				sgx_ssaframesize_tbl[i] =
-					(168 + eax + ebx + PAGE_SIZE - 1) /
-					PAGE_SIZE;
-		}
-	}
-
-	cpuid_count(SGX_CPUID, 0x0, &eax, &ebx, &ecx, &edx);
-	if (edx & 0xFFFF) {
-#ifdef CONFIG_X86_64
-		sgx_encl_size_max_64 = 1ULL << ((edx >> 8) & 0xFF);
-#endif
-		sgx_encl_size_max_32 = 1ULL << (edx & 0xFF);
-	}
+        pr_err("intel_sgx: getting number of epc banks ...\n");
 
 	sgx_nr_epc_banks = 0;
 	do {
@@ -228,6 +192,7 @@ static int sgx_init_platform(void)
 	} while (sgx_nr_epc_banks < SGX_MAX_EPC_BANKS);
 
 	/* There should be at least one EPC area or something is wrong. */
+	pr_err("intel_sgx: number of epc banks: %d\n", sgx_nr_epc_banks);
 	if (!sgx_nr_epc_banks) {
 		WARN_ON(1);
 		return 1;
@@ -271,12 +236,16 @@ static int sgx_dev_init(struct device *dev)
 
 	pr_info("intel_sgx: " DRV_DESCRIPTION " v" DRV_VERSION "\n");
 
-	if (boot_cpu_data.x86_vendor != X86_VENDOR_INTEL)
+	if (boot_cpu_data.x86_vendor != X86_VENDOR_INTEL){
+		pr_err("intel_sgx: cpu is not from Intel.\n");
 		return -ENODEV;
+        }
 
 	ret = sgx_init_platform();
-	if (ret)
+	if (ret){
+		pr_err("intel_sgx: sgx_init_platform failed.\n");
 		return ret;
+        }
 
 	pr_info("intel_sgx: Number of EPCs %d\n", sgx_nr_epc_banks);
 
@@ -288,6 +257,7 @@ static int sgx_dev_init(struct device *dev)
 			sgx_epc_banks[i].end - sgx_epc_banks[i].start);
 		if (!sgx_epc_banks[i].mem) {
 			sgx_nr_epc_banks = i;
+		        pr_err("intel_sgx: no EPC allocated for bank #%d\n", i);
 			ret = -ENOMEM;
 			goto out_iounmap;
 		}
@@ -296,6 +266,7 @@ static int sgx_dev_init(struct device *dev)
 			sgx_epc_banks[i].end - sgx_epc_banks[i].start);
 		if (ret) {
 			sgx_nr_epc_banks = i+1;
+		        pr_err("intel_sgx: failed init EPC for bank #%d\n", i);
 			goto out_iounmap;
 		}
 	}
@@ -336,17 +307,21 @@ static int sgx_drv_probe(struct platform_device *pdev)
 	unsigned int eax, ebx, ecx, edx;
 	int i;
 
-	if (boot_cpu_data.x86_vendor != X86_VENDOR_INTEL)
+        pr_info("intel_sgx: drive probed.\n");
+	if (boot_cpu_data.x86_vendor != X86_VENDOR_INTEL){
+		pr_err("intel_sgx: x86_vendor is not Intel\n");
 		return -ENODEV;
+        }
 
 	if (atomic_cmpxchg(&sgx_init_flag, 0, 1)) {
-		pr_warn("intel_sgx: second initialization call skipped\n");
+		pr_warn("intel_sgx: second initialization call skipped.\n");
 		return 0;
 	}
 
+        pr_err("intel_sgx: CPUIDing ...\n");
 	cpuid(0, &eax, &ebx, &ecx, &edx);
 	if (eax < SGX_CPUID) {
-		pr_err("intel_sgx: CPUID is missing the SGX leaf instruction\n");
+		pr_err("intel_sgx: CPUID is missing the SGX leaf instruction.\n");
 		return -ENODEV;
 	}
 
@@ -363,6 +338,7 @@ static int sgx_drv_probe(struct platform_device *pdev)
 
 	sgx_has_sgx2 = (eax & 2) != 0;
 
+	pr_err("intel_sgx: checking OSXSAVE...\n");
 	if (boot_cpu_has(X86_FEATURE_OSXSAVE)) {
 		cpuid_count(SGX_CPUID, 0x1, &eax, &ebx, &ecx, &edx);
 		sgx_xfrm_mask = (((u64)edx) << 32) + (u64)ecx;
