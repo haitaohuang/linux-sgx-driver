@@ -916,7 +916,7 @@ int sgx_encl_init(struct sgx_encl *encl, struct sgx_sigstruct *sigstruct,
 
 	if (encl->flags & SGX_ENCL_INITIALIZED) {
 		mutex_unlock(&encl->lock);
-		return 0;
+		return -EINVAL;
 	}
 
 	for (i = 0; i < SGX_EINIT_SLEEP_COUNT; i++) {
